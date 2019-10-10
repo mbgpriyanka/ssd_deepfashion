@@ -1,0 +1,2066 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "Copy of cap_ssd_pferrari_anno_trial.ipynb",
+      "provenance": [],
+      "collapsed_sections": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "7SFrBFIK6XcG",
+        "colab_type": "text"
+      },
+      "source": [
+        "This code reads from the annotations files of the deep fashion dataset and separates to train,validation and test annotation files depending on the evaluation status."
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "MmJ1SWOoV6m6",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "import pandas as pd\n",
+        "import os\n",
+        "import re # for extracting folder names\n",
+        "\n",
+        "from os import path\n",
+        "import pickle"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "ldSigaYopR8w",
+        "colab_type": "text"
+      },
+      "source": [
+        ""
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "tvXKaEDgiQZ7",
+        "colab_type": "code",
+        "outputId": "04936e20-a1f1-4afd-d921-f67d194e2084",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 121
+        }
+      },
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive', force_remount=True)"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Go to this URL in a browser: https://accounts.google.com/o/oauth2/auth?client_id=947318989803-6bn6qk8qdgf4n4g3pfee6491hc0brc4i.apps.googleusercontent.com&redirect_uri=urn%3Aietf%3Awg%3Aoauth%3A2.0%3Aoob&scope=email%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdocs.test%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.photos.readonly%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fpeopleapi.readonly&response_type=code\n",
+            "\n",
+            "Enter your authorization code:\n",
+            "··········\n",
+            "Mounted at /content/drive\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "qeg-LOYmek33",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "bb_file='/content/drive/My Drive/Capstone project/Anno/list_bbox.txt'\n",
+        "category_img_file='/content/drive/My Drive/Capstone project/Anno/list_category_img.txt'\n",
+        "category_cloth_file =  '/content/drive/My Drive/Capstone project/SSD/pierliguiferrari/Trial/list_category_cloth.txt'\n",
+        "\n",
+        "train_root = '/content/drive/My Drive/Capstone project/SSD/Training/'\n",
+        "val_root = '/content/drive/My Drive/Capstone project/SSD/Validation/'\n",
+        "test_root = '/content/drive/My Drive/Capstone project/SSD/Testing/'"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "lLJ1znrkAbw_",
+        "colab_type": "text"
+      },
+      "source": [
+        "**Reading of the Annotation files**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "htRMkS5S974T",
+        "colab_type": "code",
+        "outputId": "9518289c-d46c-43b8-a200-5a7f4e218b71",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 84
+        }
+      },
+      "source": [
+        "# read from the category file to get the labels\n",
+        "df_category_img=pd.read_csv(category_img_file,delimiter=\"\\s+\",skiprows=1)  \n",
+        "print(len(df_category_img))                       \n",
+        "df_category_img.head()\n",
+        "df_category_img.category_label.unique()  # to get the different types of categories of clothes"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "289222\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "array([ 3,  2,  5,  4,  1, 18, 17, 19, 16,  7, 10,  6, 11,  9, 15, 12, 20,\n",
+              "       13, 14,  8, 33, 32, 26, 29, 34, 27, 24, 35, 30, 23, 22, 36, 31, 25,\n",
+              "       28, 21, 41, 48, 39, 44, 42, 47, 37, 43, 40, 46])"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 7
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "X9I40GbACWUt",
+        "colab_type": "code",
+        "outputId": "9e7cd79b-4611-423d-eeb2-f4801f450037",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "df_bb=pd.read_csv(bb_file,delimiter=\"\\s+\",skiprows=2)\n",
+        "df_bb.columns=[\"image_name\",\"xmin\",\"ymin\",\"xmax\",\"ymax\"]\n",
+        "df_bb.head()\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000002.jpg</td>\n",
+              "      <td>67</td>\n",
+              "      <td>59</td>\n",
+              "      <td>155</td>\n",
+              "      <td>161</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000003.jpg</td>\n",
+              "      <td>65</td>\n",
+              "      <td>65</td>\n",
+              "      <td>156</td>\n",
+              "      <td>200</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000004.jpg</td>\n",
+              "      <td>51</td>\n",
+              "      <td>62</td>\n",
+              "      <td>167</td>\n",
+              "      <td>182</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000005.jpg</td>\n",
+              "      <td>46</td>\n",
+              "      <td>88</td>\n",
+              "      <td>166</td>\n",
+              "      <td>262</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000006.jpg</td>\n",
+              "      <td>47</td>\n",
+              "      <td>67</td>\n",
+              "      <td>211</td>\n",
+              "      <td>241</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                        image_name  xmin  ymin  xmax  ymax\n",
+              "0  img/Sheer_Pleated-Front_Blouse/img_00000002.jpg    67    59   155   161\n",
+              "1  img/Sheer_Pleated-Front_Blouse/img_00000003.jpg    65    65   156   200\n",
+              "2  img/Sheer_Pleated-Front_Blouse/img_00000004.jpg    51    62   167   182\n",
+              "3  img/Sheer_Pleated-Front_Blouse/img_00000005.jpg    46    88   166   262\n",
+              "4  img/Sheer_Pleated-Front_Blouse/img_00000006.jpg    47    67   211   241"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 8
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "arEK6dvuWEU0",
+        "colab_type": "code",
+        "outputId": "19266c7d-379d-4278-90f6-a6502e9f585a",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 218
+        }
+      },
+      "source": [
+        "df_list_eval_partition=pd.read_csv('/content/drive/My Drive/Capstone project/Eval/list_eval_partition.txt',delimiter=\"\\s+\",skiprows=1)\n",
+        "print(len(df_list_eval_partition))                       \n",
+        "df_list_eval_partition.head()\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "289222\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000001.jpg</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000002.jpg</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000003.jpg</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000004.jpg</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000005.jpg</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                        image_name evaluation_status\n",
+              "0  img/Sheer_Pleated-Front_Blouse/img_00000001.jpg             train\n",
+              "1  img/Sheer_Pleated-Front_Blouse/img_00000002.jpg             train\n",
+              "2  img/Sheer_Pleated-Front_Blouse/img_00000003.jpg               val\n",
+              "3  img/Sheer_Pleated-Front_Blouse/img_00000004.jpg             train\n",
+              "4  img/Sheer_Pleated-Front_Blouse/img_00000005.jpg              test"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 9
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "6-Lllhs2BJiY",
+        "colab_type": "code",
+        "outputId": "6717fe30-4e93-4d7b-b98e-fee2fc193d32",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "df_list_eval_partition.columns=[\"image_name\",\"evaluation_status\"]\n",
+        "df_list_eval_partition.head()\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000001.jpg</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000002.jpg</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000003.jpg</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000004.jpg</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>img/Sheer_Pleated-Front_Blouse/img_00000005.jpg</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                        image_name evaluation_status\n",
+              "0  img/Sheer_Pleated-Front_Blouse/img_00000001.jpg             train\n",
+              "1  img/Sheer_Pleated-Front_Blouse/img_00000002.jpg             train\n",
+              "2  img/Sheer_Pleated-Front_Blouse/img_00000003.jpg               val\n",
+              "3  img/Sheer_Pleated-Front_Blouse/img_00000004.jpg             train\n",
+              "4  img/Sheer_Pleated-Front_Blouse/img_00000005.jpg              test"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 10
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "V9_TGmxqhPjD",
+        "colab_type": "code",
+        "outputId": "43ab31e4-7a06-4e37-cfe2-1afce2bd933f",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 336
+        }
+      },
+      "source": [
+        "df_category_cloth = pd.read_csv(category_cloth_file,delimiter=\"\\s+\",skiprows=1)\n",
+        "print(df_category_cloth.category_type.unique()) # has only three unique values\n",
+        "print(df_category_cloth.category_name.unique())\n",
+        "df_category_cloth.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "[1 2 3]\n",
+            "['Anorak' 'Blazer' 'Blouse' 'Bomber' 'Button-Down' 'Cardigan' 'Flannel'\n",
+            " 'Halter' 'Henley' 'Hoodie' 'Jacket' 'Jersey' 'Parka' 'Peacoat' 'Poncho'\n",
+            " 'Sweater' 'Tank' 'Tee' 'Top' 'Turtleneck' 'Capris' 'Chinos' 'Culottes'\n",
+            " 'Cutoffs' 'Gauchos' 'Jeans' 'Jeggings' 'Jodhpurs' 'Joggers' 'Leggings'\n",
+            " 'Sarong' 'Shorts' 'Skirt' 'Sweatpants' 'Sweatshorts' 'Trunks' 'Caftan'\n",
+            " 'Cape' 'Coat' 'Coverup' 'Dress' 'Jumpsuit' 'Kaftan' 'Kimono' 'Nightdress'\n",
+            " 'Onesie' 'Robe' 'Romper' 'Shirtdress' 'Sundress']\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>category_name</th>\n",
+              "      <th>category_type</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>Anorak</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>Blazer</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>Blouse</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>Bomber</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>Button-Down</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "  category_name  category_type\n",
+              "0        Anorak              1\n",
+              "1        Blazer              1\n",
+              "2        Blouse              1\n",
+              "3        Bomber              1\n",
+              "4   Button-Down              1"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 73
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "gpK1bCR0AmHN",
+        "colab_type": "text"
+      },
+      "source": [
+        "**Split into different dataframes as per the evaluation status**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "IdyjciJaADQ0",
+        "colab_type": "code",
+        "outputId": "23d6b0fd-51a4-48e1-943b-a670140bb527",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 574
+        }
+      },
+      "source": [
+        "df_train=[]\n",
+        "df_val=[]\n",
+        "df_test=[]\n",
+        "\n",
+        "\n",
+        "df_train=df_list_eval_partition[df_list_eval_partition.evaluation_status == 'train']\n",
+        "df_val=df_list_eval_partition[df_list_eval_partition.evaluation_status == 'val']\n",
+        "df_test=df_list_eval_partition[df_list_eval_partition.evaluation_status == 'test']\n",
+        "print(\"Training df\",df_train[0:10])\n",
+        "print(\"Validation df\",df_val[0:10])\n",
+        "print(\"Test df\",df_test[0:10])\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Training df                                          image_name evaluation_status\n",
+            "0   img/Sheer_Pleated-Front_Blouse/img_00000001.jpg             train\n",
+            "1   img/Sheer_Pleated-Front_Blouse/img_00000002.jpg             train\n",
+            "3   img/Sheer_Pleated-Front_Blouse/img_00000004.jpg             train\n",
+            "7   img/Sheer_Pleated-Front_Blouse/img_00000008.jpg             train\n",
+            "8   img/Sheer_Pleated-Front_Blouse/img_00000009.jpg             train\n",
+            "9   img/Sheer_Pleated-Front_Blouse/img_00000010.jpg             train\n",
+            "10  img/Sheer_Pleated-Front_Blouse/img_00000011.jpg             train\n",
+            "11  img/Sheer_Pleated-Front_Blouse/img_00000012.jpg             train\n",
+            "13  img/Sheer_Pleated-Front_Blouse/img_00000014.jpg             train\n",
+            "15  img/Sheer_Pleated-Front_Blouse/img_00000016.jpg             train\n",
+            "Validation df                                          image_name evaluation_status\n",
+            "2   img/Sheer_Pleated-Front_Blouse/img_00000003.jpg               val\n",
+            "5   img/Sheer_Pleated-Front_Blouse/img_00000006.jpg               val\n",
+            "14  img/Sheer_Pleated-Front_Blouse/img_00000015.jpg               val\n",
+            "26  img/Sheer_Pleated-Front_Blouse/img_00000027.jpg               val\n",
+            "27  img/Sheer_Pleated-Front_Blouse/img_00000028.jpg               val\n",
+            "30  img/Sheer_Pleated-Front_Blouse/img_00000031.jpg               val\n",
+            "38  img/Sheer_Pleated-Front_Blouse/img_00000039.jpg               val\n",
+            "44  img/Sheer_Pleated-Front_Blouse/img_00000045.jpg               val\n",
+            "49  img/Sheer_Pleated-Front_Blouse/img_00000050.jpg               val\n",
+            "50  img/Sheer_Pleated-Front_Blouse/img_00000051.jpg               val\n",
+            "Test df                                          image_name evaluation_status\n",
+            "4   img/Sheer_Pleated-Front_Blouse/img_00000005.jpg              test\n",
+            "6   img/Sheer_Pleated-Front_Blouse/img_00000007.jpg              test\n",
+            "12  img/Sheer_Pleated-Front_Blouse/img_00000013.jpg              test\n",
+            "18  img/Sheer_Pleated-Front_Blouse/img_00000019.jpg              test\n",
+            "19  img/Sheer_Pleated-Front_Blouse/img_00000020.jpg              test\n",
+            "28  img/Sheer_Pleated-Front_Blouse/img_00000029.jpg              test\n",
+            "52  img/Sheer_Pleated-Front_Blouse/img_00000053.jpg              test\n",
+            "53  img/Sheer_Pleated-Front_Blouse/img_00000054.jpg              test\n",
+            "57  img/Sheer_Pleated-Front_Blouse/img_00000058.jpg              test\n",
+            "71  img/Sheer_Pleated-Front_Blouse/img_00000072.jpg              test\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "oVfUJ6VNWEPm",
+        "colab_type": "code",
+        "outputId": "a7de8489-4847-46ac-c93e-7f32d937e0dd",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 67
+        }
+      },
+      "source": [
+        "print(\"Length of training set of images\",len(df_train))\n",
+        "print(\"Length of validation set of images\",len(df_val))\n",
+        "print(\"Length of testing set of images\",len(df_test))"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Length of training set of images 209222\n",
+            "Length of validation set of images 40000\n",
+            "Length of testing set of images 40000\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "D8psdPLWCWRn",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "f_classes = ['Abstract_Dot_Off-the-Shoulder_Top', 'Abstract_Floral_Fringe_Crop_Top', 'Abstract_Floral_Print_Poncho', 'Abstract-Plaid_Ruffled_Bell_Sleeve_Top',\n",
+        "             'Abstract-Quilted_Drawstring_Hoodie','Acid_Wash_Jeggings', 'Asymmetrical_Open-Front_Blazer', 'Button-Tab_Ankle_Chinos', 'Tile_Print_Drawstring_Caftan', 'Tonal_Plaid_Robe',\n",
+        "               'Topstitched_Jodhpurs', 'Zippered_Sleeveless_Hoodie']\n",
+        "#FOR TRAINING SET\n",
+        "tempn=df_train[\"image_name\"]\n",
+        "tempn.reset_index(drop=True,inplace=True) # reset indices to make it stored contiguously\n",
+        "tempns=[tempn[i].split('/')[1].strip() for i in range(len(tempn))]  #get only the cloth category\n",
+        "\n",
+        " \n",
+        "# FOR VALIDATION SET\n",
+        "temp=df_val[\"image_name\"]\n",
+        "temp.reset_index(drop=True,inplace=True)\n",
+        "temps=[temp[i].split('/')[1].strip() for i in range(len(temp))]  #get only the cloth category\n",
+        "#temps\n",
+        "\n",
+        "#FOR TESTING SET\n",
+        "\n",
+        "tempt=df_test[\"image_name\"]\n",
+        "tempt.reset_index(drop=True,inplace=True)\n",
+        "tempts=[tempt[i].split('/')[1].strip() for i in range(len(temp))]  #get only the cloth category\n",
+        "\n",
+        "\n"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "Et8wMghmBN6X",
+        "colab_type": "text"
+      },
+      "source": [
+        "**Get only 12 categories for the project**"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "MlhHXBV667IM",
+        "colab_type": "code",
+        "outputId": "d6b598a6-8c09-4024-9b4a-8adb6c63e395",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 218
+        }
+      },
+      "source": [
+        "# get the training dataset which includes the mentioned cloth categories used in the project -12 categories\n",
+        "boolsn=[tempns[i] in f_classes for i in range(len(tempns))]\n",
+        "len(boolsn)\n",
+        "\n",
+        "train_mini = df_train[boolsn]\n",
+        "print(len(train_mini))\n",
+        "\n",
+        "train_mini.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "506\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>19507</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19509</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19511</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19513</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19514</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                              image_name evaluation_status\n",
+              "19507  img/Asymmetrical_Open-Front_Blazer/img_0000000...             train\n",
+              "19509  img/Asymmetrical_Open-Front_Blazer/img_0000000...             train\n",
+              "19511  img/Asymmetrical_Open-Front_Blazer/img_0000000...             train\n",
+              "19513  img/Asymmetrical_Open-Front_Blazer/img_0000000...             train\n",
+              "19514  img/Asymmetrical_Open-Front_Blazer/img_0000000...             train"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 18
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "hK9Ces5sycWS",
+        "colab_type": "code",
+        "outputId": "6fbe9177-3f88-4e40-bc6a-a6374946ea77",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 218
+        }
+      },
+      "source": [
+        "# get the validation dataset which includes the mentioned cloth categories used in the project\n",
+        "bools=[temps[i] in f_classes for i in range(len(temp))]\n",
+        "len(bools)\n",
+        "val_mini = df_val[bools]\n",
+        "print(len(val_mini))\n",
+        "val_mini.head()\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "82\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>19508</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19512</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19517</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000001...</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19518</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000001...</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19523</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000001...</td>\n",
+              "      <td>val</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                              image_name evaluation_status\n",
+              "19508  img/Asymmetrical_Open-Front_Blazer/img_0000000...               val\n",
+              "19512  img/Asymmetrical_Open-Front_Blazer/img_0000000...               val\n",
+              "19517  img/Asymmetrical_Open-Front_Blazer/img_0000001...               val\n",
+              "19518  img/Asymmetrical_Open-Front_Blazer/img_0000001...               val\n",
+              "19523  img/Asymmetrical_Open-Front_Blazer/img_0000001...               val"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 19
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "LuDOHZaJ5y6n",
+        "colab_type": "code",
+        "outputId": "11dc6d08-ac49-42bd-b591-638cb90903d9",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 218
+        }
+      },
+      "source": [
+        "# get the testing dataset which includes the mentioned cloth categories used in the project\n",
+        "\n",
+        "boolst=[tempts[i] in f_classes for i in range(len(tempts))]\n",
+        "len(boolst)\n",
+        "test_mini = df_test[boolst]\n",
+        "print(len(test_mini))\n",
+        "test_mini.head()\n",
+        "# the train ,validation and test datasets for the 12 categories are ready"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "86\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>19510</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19524</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000001...</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19525</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000001...</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19538</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000003...</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>19546</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000004...</td>\n",
+              "      <td>test</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                              image_name evaluation_status\n",
+              "19510  img/Asymmetrical_Open-Front_Blazer/img_0000000...              test\n",
+              "19524  img/Asymmetrical_Open-Front_Blazer/img_0000001...              test\n",
+              "19525  img/Asymmetrical_Open-Front_Blazer/img_0000001...              test\n",
+              "19538  img/Asymmetrical_Open-Front_Blazer/img_0000003...              test\n",
+              "19546  img/Asymmetrical_Open-Front_Blazer/img_0000004...              test"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 20
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "beaq2kNPCWMh",
+        "colab_type": "code",
+        "outputId": "2dc27ac5-bccf-4b21-f808-5b80318c4fb9",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 472
+        }
+      },
+      "source": [
+        "df_final_train_mini=pd.merge(train_mini,df_bb,how='inner',on=['image_name'])\n",
+        "#df_final_train_mini.xmin = df_final_train_mini.xmin/300\n",
+        "#df_final_train_mini.ymin = df_final_train_mini.ymin/300\n",
+        "#df_final_train_mini.xmax = df_final_train_mini.xmax/300\n",
+        "#df_final_train_mini.ymax = df_final_train_mini.ymax/300\n",
+        "print(len(df_final_train_mini))\n",
+        "print(df_final_train_mini.head())\n",
+        "\n",
+        "df_final_val_mini=pd.merge(val_mini,df_bb,how='inner',on=['image_name'])\n",
+        "#df_final_val_mini.xmin = df_final_val_mini.xmin/300\n",
+        "#df_final_val_mini.ymin = df_final_val_mini.ymin/300\n",
+        "#df_final_val_mini.xmax = df_final_val_mini.xmax/300\n",
+        "#df_final_val_mini.ymax = df_final_val_mini.ymax/300\n",
+        "print(len(df_final_val_mini))\n",
+        "print(df_final_val_mini.head())\n",
+        "\n",
+        "df_final_test_mini=pd.merge(test_mini,df_bb,how='inner',on=['image_name'])\n",
+        "#df_final_test_mini.xmin = df_final_test_mini.xmin/300\n",
+        "#df_final_test_mini.ymin = df_final_test_mini.ymin/300\n",
+        "#df_final_test_mini.xmax = df_final_test_mini.xmax/300\n",
+        "#df_final_test_mini.ymax = df_final_test_mini.ymax/300\n",
+        "print(len(df_final_test_mini))\n",
+        "print(df_final_val_mini.head())\n",
+        "\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "506\n",
+            "                                          image_name  ... ymax\n",
+            "0  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  300\n",
+            "1  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  227\n",
+            "2  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  293\n",
+            "3  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  253\n",
+            "4  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  261\n",
+            "\n",
+            "[5 rows x 6 columns]\n",
+            "82\n",
+            "                                          image_name  ... ymax\n",
+            "0  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  276\n",
+            "1  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  233\n",
+            "2  img/Asymmetrical_Open-Front_Blazer/img_0000001...  ...  164\n",
+            "3  img/Asymmetrical_Open-Front_Blazer/img_0000001...  ...  151\n",
+            "4  img/Asymmetrical_Open-Front_Blazer/img_0000001...  ...  217\n",
+            "\n",
+            "[5 rows x 6 columns]\n",
+            "86\n",
+            "                                          image_name  ... ymax\n",
+            "0  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  276\n",
+            "1  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...  233\n",
+            "2  img/Asymmetrical_Open-Front_Blazer/img_0000001...  ...  164\n",
+            "3  img/Asymmetrical_Open-Front_Blazer/img_0000001...  ...  151\n",
+            "4  img/Asymmetrical_Open-Front_Blazer/img_0000001...  ...  217\n",
+            "\n",
+            "[5 rows x 6 columns]\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "5mi1pIPGxSCI",
+        "colab_type": "code",
+        "outputId": "79145d40-8918-41bc-fbf2-8d2626220633",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dftr = df_final_train_mini.copy()\n",
+        "dftr['class_id'] = \"\"         # this code is to populate the cloth category to 1 , 2 or 3 which corresponds to Top,Bottom and Full\n",
+        "\n",
+        "for i in range(0,len(dftr)):\n",
+        "    t = dftr.iloc[i,0]   # get the image name \n",
+        "    path = t.partition('/')[2] # get the folder name+ imagenumber eg :Asymmetrical_Open-Front_Blazer/img_0000001.jpeg\n",
+        "    url = train_root + path  #add the absolute location of the image in the drive \n",
+        "    dftr.iloc[i,0] = url #assign it bak to the column\n",
+        "    temp =str(t.split('/')[1].strip().split('_')[-1]) # get the folder name or the last part of category name\n",
+        "    c_type = df_category_cloth.loc[df_category_cloth['category_name'] == temp,'category_type'].iloc[0] # get the category_cloth value\n",
+        "    dftr.iloc[i,6] = c_type\n",
+        "    \"\"\"if (c_type == 1):\n",
+        "        dftr.iloc[i,6] = 'Top' #assign it to the new column\n",
+        "    elif (c_type == 2):\n",
+        "        dftr.iloc[i,6] = 'Bottom' \n",
+        "    else :\n",
+        "        dftr.iloc[i,6] = 'Full Dress' \"\"\"\n",
+        "        \n",
+        "dftr.class_id.unique()\n",
+        "dftr.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>class_id</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>19</td>\n",
+              "      <td>76</td>\n",
+              "      <td>193</td>\n",
+              "      <td>300</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>28</td>\n",
+              "      <td>47</td>\n",
+              "      <td>164</td>\n",
+              "      <td>227</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>76</td>\n",
+              "      <td>49</td>\n",
+              "      <td>240</td>\n",
+              "      <td>293</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>53</td>\n",
+              "      <td>13</td>\n",
+              "      <td>269</td>\n",
+              "      <td>253</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>20</td>\n",
+              "      <td>46</td>\n",
+              "      <td>164</td>\n",
+              "      <td>261</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  ... class_id\n",
+              "0  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "1  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "2  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "3  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "4  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "\n",
+              "[5 rows x 7 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 129
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "9OSoezq_yKci",
+        "colab_type": "code",
+        "outputId": "25deb771-f55e-47b3-ac8e-5e6856cb2a79",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dftr.head() "
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>category_cloth</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>19</td>\n",
+              "      <td>76</td>\n",
+              "      <td>193</td>\n",
+              "      <td>300</td>\n",
+              "      <td>Top</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>28</td>\n",
+              "      <td>47</td>\n",
+              "      <td>164</td>\n",
+              "      <td>227</td>\n",
+              "      <td>Top</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>76</td>\n",
+              "      <td>49</td>\n",
+              "      <td>240</td>\n",
+              "      <td>293</td>\n",
+              "      <td>Top</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>53</td>\n",
+              "      <td>13</td>\n",
+              "      <td>269</td>\n",
+              "      <td>253</td>\n",
+              "      <td>Top</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>img/Asymmetrical_Open-Front_Blazer/img_0000000...</td>\n",
+              "      <td>train</td>\n",
+              "      <td>20</td>\n",
+              "      <td>46</td>\n",
+              "      <td>164</td>\n",
+              "      <td>261</td>\n",
+              "      <td>Top</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  ... category_cloth\n",
+              "0  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...            Top\n",
+              "1  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...            Top\n",
+              "2  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...            Top\n",
+              "3  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...            Top\n",
+              "4  img/Asymmetrical_Open-Front_Blazer/img_0000000...  ...            Top\n",
+              "\n",
+              "[5 rows x 7 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 112
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "0ifgDqOSaf9I",
+        "colab_type": "code",
+        "outputId": "30899d31-4b19-4671-a221-f294c940867a",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dfval = df_final_val_mini.copy()\n",
+        "dfval['class_id'] = \"\"\n",
+        "\n",
+        "for i in range(0,len(dfval)):\n",
+        "    t = dfval.iloc[i,0]   # get the image name \n",
+        "    path = t.partition('/')[2] # get the folder name+ imagenumber eg :Asymmetrical_Open-Front_Blazer/img_0000001.jpeg\n",
+        "    url = val_root + path  #add the absolute location of the image in the drive \n",
+        "    dfval.iloc[i,0] = url #assign it back to the column\n",
+        "\n",
+        "    temp =str(t.split('/')[1].strip().split('_')[-1]) # get the folder name or the last part of category name\n",
+        "    c_type = df_category_cloth.loc[df_category_cloth['category_name'] == temp,'category_type'].iloc[0] # get the category_cloth value\n",
+        "    dfval.iloc[i,6] = c_type\n",
+        "    \"\"\"if (c_type == 1):\n",
+        "        dfval.iloc[i,6] = 'Top' #assign it to the new column\n",
+        "    elif (c_type == 2):\n",
+        "        dfval.iloc[i,6] = 'Bottom' \n",
+        "    else :\n",
+        "        dfval.iloc[i,6] = 'Full Dress' \"\"\"\n",
+        "dfval.class_id.unique()\n",
+        "dfval.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>class_id</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>val</td>\n",
+              "      <td>73</td>\n",
+              "      <td>50</td>\n",
+              "      <td>239</td>\n",
+              "      <td>276</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>val</td>\n",
+              "      <td>56</td>\n",
+              "      <td>49</td>\n",
+              "      <td>181</td>\n",
+              "      <td>233</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>val</td>\n",
+              "      <td>64</td>\n",
+              "      <td>37</td>\n",
+              "      <td>165</td>\n",
+              "      <td>164</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>val</td>\n",
+              "      <td>60</td>\n",
+              "      <td>1</td>\n",
+              "      <td>175</td>\n",
+              "      <td>151</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>val</td>\n",
+              "      <td>94</td>\n",
+              "      <td>50</td>\n",
+              "      <td>216</td>\n",
+              "      <td>217</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  ... class_id\n",
+              "0  /content/drive/My Drive/Capstone project/SSD/V...  ...        1\n",
+              "1  /content/drive/My Drive/Capstone project/SSD/V...  ...        1\n",
+              "2  /content/drive/My Drive/Capstone project/SSD/V...  ...        1\n",
+              "3  /content/drive/My Drive/Capstone project/SSD/V...  ...        1\n",
+              "4  /content/drive/My Drive/Capstone project/SSD/V...  ...        1\n",
+              "\n",
+              "[5 rows x 7 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 132
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "h632BZqeaf5w",
+        "colab_type": "code",
+        "outputId": "4b1ab466-4a06-4286-f458-0533e51a9f46",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dftest = df_final_test_mini.copy()\n",
+        "dftest['class_id'] = \"\"\n",
+        "\n",
+        "for i in range(0,len(dftest)):\n",
+        "    t = dftest.iloc[i,0]   # get the image name \n",
+        "    path = t.partition('/')[2] # get the folder name+ imagenumber eg :Asymmetrical_Open-Front_Blazer/img_0000001.jpeg\n",
+        "    url = test_root + path  #add the absolute location of the image in the drive \n",
+        "    dftest.iloc[i,0] = url #assign it bak to the column\n",
+        "\n",
+        "    temp =str(t.split('/')[1].strip().split('_')[-1]) # get the folder name or the last part of category name\n",
+        "    c_type = df_category_cloth.loc[df_category_cloth['category_name'] == temp,'category_type'].iloc[0] # get the category_cloth value\n",
+        "    dftest.iloc[i,6] = c_type\n",
+        "    \"\"\"if (c_type == 1):\n",
+        "        dftest.iloc[i,6] = 'Top' #assign it to the new column\n",
+        "    elif (c_type == 2):\n",
+        "        dftest.iloc[i,6] = 'Bottom' \n",
+        "    else :\n",
+        "        dftest.iloc[i,6] = 'Full Dress' \"\"\"\n",
+        "    \n",
+        "dftest.class_id.unique()\n",
+        "dftest.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>evaluation_status</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>class_id</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>test</td>\n",
+              "      <td>6</td>\n",
+              "      <td>92</td>\n",
+              "      <td>166</td>\n",
+              "      <td>297</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>test</td>\n",
+              "      <td>1</td>\n",
+              "      <td>8</td>\n",
+              "      <td>187</td>\n",
+              "      <td>218</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>test</td>\n",
+              "      <td>93</td>\n",
+              "      <td>43</td>\n",
+              "      <td>215</td>\n",
+              "      <td>149</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>test</td>\n",
+              "      <td>39</td>\n",
+              "      <td>67</td>\n",
+              "      <td>207</td>\n",
+              "      <td>250</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>test</td>\n",
+              "      <td>88</td>\n",
+              "      <td>49</td>\n",
+              "      <td>227</td>\n",
+              "      <td>282</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  ... class_id\n",
+              "0  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "1  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "2  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "3  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "4  /content/drive/My Drive/Capstone project/SSD/T...  ...        1\n",
+              "\n",
+              "[5 rows x 7 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 131
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "onJ8dtGkaf2v",
+        "colab_type": "code",
+        "outputId": "4b55e02b-9913-437f-a87f-94153450415f",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dftr = dftr[['image_name','xmin','ymin','xmax', 'ymax', 'class_id']]  # get only the required columns\n",
+        "dfval = dfval[['image_name','xmin','ymin','xmax', 'ymax', 'class_id']]  # get only the required columns\n",
+        "dftest = dftest[['image_name','xmin','ymin','xmax', 'ymax', 'class_id']]  # get only the required columns\n",
+        "\n",
+        "dftr.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>class_id</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>19</td>\n",
+              "      <td>76</td>\n",
+              "      <td>193</td>\n",
+              "      <td>300</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>28</td>\n",
+              "      <td>47</td>\n",
+              "      <td>164</td>\n",
+              "      <td>227</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>76</td>\n",
+              "      <td>49</td>\n",
+              "      <td>240</td>\n",
+              "      <td>293</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>53</td>\n",
+              "      <td>13</td>\n",
+              "      <td>269</td>\n",
+              "      <td>253</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>20</td>\n",
+              "      <td>46</td>\n",
+              "      <td>164</td>\n",
+              "      <td>261</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  xmin  ...  ymax  class_id\n",
+              "0  /content/drive/My Drive/Capstone project/SSD/T...    19  ...   300         1\n",
+              "1  /content/drive/My Drive/Capstone project/SSD/T...    28  ...   227         1\n",
+              "2  /content/drive/My Drive/Capstone project/SSD/T...    76  ...   293         1\n",
+              "3  /content/drive/My Drive/Capstone project/SSD/T...    53  ...   253         1\n",
+              "4  /content/drive/My Drive/Capstone project/SSD/T...    20  ...   261         1\n",
+              "\n",
+              "[5 rows x 6 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 134
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "836M4v2wyKZV",
+        "colab_type": "code",
+        "outputId": "7b33b6c0-6ffb-4a59-ecdb-c427d8b6e84b",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dfval.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>class_id</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>73</td>\n",
+              "      <td>50</td>\n",
+              "      <td>239</td>\n",
+              "      <td>276</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>56</td>\n",
+              "      <td>49</td>\n",
+              "      <td>181</td>\n",
+              "      <td>233</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>64</td>\n",
+              "      <td>37</td>\n",
+              "      <td>165</td>\n",
+              "      <td>164</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>60</td>\n",
+              "      <td>1</td>\n",
+              "      <td>175</td>\n",
+              "      <td>151</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/V...</td>\n",
+              "      <td>94</td>\n",
+              "      <td>50</td>\n",
+              "      <td>216</td>\n",
+              "      <td>217</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  xmin  ...  ymax  class_id\n",
+              "0  /content/drive/My Drive/Capstone project/SSD/V...    73  ...   276         1\n",
+              "1  /content/drive/My Drive/Capstone project/SSD/V...    56  ...   233         1\n",
+              "2  /content/drive/My Drive/Capstone project/SSD/V...    64  ...   164         1\n",
+              "3  /content/drive/My Drive/Capstone project/SSD/V...    60  ...   151         1\n",
+              "4  /content/drive/My Drive/Capstone project/SSD/V...    94  ...   217         1\n",
+              "\n",
+              "[5 rows x 6 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 135
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Ia5I6KE1xR-_",
+        "colab_type": "code",
+        "outputId": "7d78f205-ab98-42aa-d3f0-2a551c2aa471",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 201
+        }
+      },
+      "source": [
+        "dftest.head()"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/html": [
+              "<div>\n",
+              "<style scoped>\n",
+              "    .dataframe tbody tr th:only-of-type {\n",
+              "        vertical-align: middle;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe tbody tr th {\n",
+              "        vertical-align: top;\n",
+              "    }\n",
+              "\n",
+              "    .dataframe thead th {\n",
+              "        text-align: right;\n",
+              "    }\n",
+              "</style>\n",
+              "<table border=\"1\" class=\"dataframe\">\n",
+              "  <thead>\n",
+              "    <tr style=\"text-align: right;\">\n",
+              "      <th></th>\n",
+              "      <th>image_name</th>\n",
+              "      <th>xmin</th>\n",
+              "      <th>ymin</th>\n",
+              "      <th>xmax</th>\n",
+              "      <th>ymax</th>\n",
+              "      <th>class_id</th>\n",
+              "    </tr>\n",
+              "  </thead>\n",
+              "  <tbody>\n",
+              "    <tr>\n",
+              "      <th>0</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>6</td>\n",
+              "      <td>92</td>\n",
+              "      <td>166</td>\n",
+              "      <td>297</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>1</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>1</td>\n",
+              "      <td>8</td>\n",
+              "      <td>187</td>\n",
+              "      <td>218</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>2</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>93</td>\n",
+              "      <td>43</td>\n",
+              "      <td>215</td>\n",
+              "      <td>149</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>3</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>39</td>\n",
+              "      <td>67</td>\n",
+              "      <td>207</td>\n",
+              "      <td>250</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "    <tr>\n",
+              "      <th>4</th>\n",
+              "      <td>/content/drive/My Drive/Capstone project/SSD/T...</td>\n",
+              "      <td>88</td>\n",
+              "      <td>49</td>\n",
+              "      <td>227</td>\n",
+              "      <td>282</td>\n",
+              "      <td>1</td>\n",
+              "    </tr>\n",
+              "  </tbody>\n",
+              "</table>\n",
+              "</div>"
+            ],
+            "text/plain": [
+              "                                          image_name  xmin  ...  ymax  class_id\n",
+              "0  /content/drive/My Drive/Capstone project/SSD/T...     6  ...   297         1\n",
+              "1  /content/drive/My Drive/Capstone project/SSD/T...     1  ...   218         1\n",
+              "2  /content/drive/My Drive/Capstone project/SSD/T...    93  ...   149         1\n",
+              "3  /content/drive/My Drive/Capstone project/SSD/T...    39  ...   250         1\n",
+              "4  /content/drive/My Drive/Capstone project/SSD/T...    88  ...   282         1\n",
+              "\n",
+              "[5 rows x 6 columns]"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 136
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "yAiduP04mgzn",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "dftr.to_csv(\"df_training_trial.csv\",index=False)   # write to csv files\n",
+        "dfval.to_csv(\"df_validation_trial.csv\",index=False)\n",
+        "dftest.to_csv(\"df_testing_trial.csv\",index=False)   \n"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "TbwibbVxmgwn",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "from google.colab import files\n",
+        "\n",
+        "files.download('df_training_trial.csv')# download the csv\n",
+        "\n",
+        "files.download('df_validation_trial.csv')  \n",
+        "files.download('df_testing_trial.csv') \n"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "OhZvyboCmgoO",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "_Sp5osiomgkt",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "a1DyXlhGCV7s",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "-wUe_jCICV5T",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "dQBbMkk5CV24",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    }
+  ]
+}
